@@ -18,9 +18,13 @@ _client = None
 
 def _get_client():
     global _client
-    if _client is None:
+    # Always re-read the key so a server restart picks up a new .env value.
+    # Reset cached client if the key has changed.
+    current_key = settings.GEMINI_API_KEY
+    if _client is None or getattr(_client, '_cityflow_api_key', None) != current_key:
         from google import genai
-        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        _client = genai.Client(api_key=current_key)
+        _client._cityflow_api_key = current_key
     return _client
 
 
@@ -59,6 +63,7 @@ Respond ONLY with valid JSON in this exact format (no markdown, no extra text):
 {
   "category": "<one of: Road, Water, Electricity, Garbage, Traffic, Public Facilities>",
   "title": "<concise 5-10 word issue title describing the specific problem>",
+  "description": "<2-3 sentence description of the issue: what is visible, how severe it looks, and what impact it may have on citizens>",
   "confidence": <float between 0.0 and 1.0>
 }
 
@@ -79,13 +84,14 @@ If no civic issue is visible, use category "Public Facilities" with low confiden
             result['category'] = 'Public Facilities'
 
         return {
-            'category': result.get('category', 'Public Facilities'),
-            'title': result.get('title', 'Municipal issue detected'),
-            'confidence': float(result.get('confidence', 0.5)),
+            'category':    result.get('category', 'Public Facilities'),
+            'title':       result.get('title', 'Municipal issue detected'),
+            'description': result.get('description', ''),
+            'confidence':  float(result.get('confidence', 0.5)),
         }
 
     except Exception as e:
-        logger.error(f"AI detect_issue failed: {e}")
+        logger.error(f"AI detect_issue failed: {e}", exc_info=True)
         return None
 
 
