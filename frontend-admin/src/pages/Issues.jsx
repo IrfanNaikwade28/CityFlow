@@ -74,13 +74,17 @@ export default function Issues() {
   const norm = (issue) => ({
     ...issue,
     displayId: issue.display_id || String(issue.id),
-    reportedBy: issue.reported_by_name || issue.reportedBy || '—',
+    // Backend: reported_by_detail.name (nested); fallback to flat field if present
+    reportedBy: issue.reported_by_detail?.name || issue.reported_by_name || issue.reportedBy || '—',
     reportedAt: issue.reported_at || issue.reportedAt,
     assignedToId: issue.assigned_to,
-    assignedToName: issue.assigned_to_name || issue.assignedTo || null,
+    // Backend: assigned_to_detail.name (nested); fallback to flat field if present
+    assignedToName: issue.assigned_to_detail?.name || issue.assigned_to_name || issue.assignedTo || null,
     priorityScore: issue.priority_score ?? issue.priorityScore ?? 0,
-    image: issue.image || null,
-    completionPhoto: issue.completion_photo || issue.completionPhoto || null,
+    // Backend: image_url (not image)
+    image: issue.image_url || issue.image || null,
+    // Backend: completion_photo_url (not completion_photo)
+    completionPhoto: issue.completion_photo_url || issue.completion_photo || issue.completionPhoto || null,
   });
 
   return (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { ClientProvider, useClient } from '../context/ClientContext';
 import { Home, FileText, Radio, User, Map } from 'lucide-react-native';
@@ -76,6 +76,24 @@ function AppContent() {
   const [activeTab, setActiveTab]                 = useState('home');
   const [workerTab, setWorkerTab]                 = useState('home');
 
+  // Redirect to the correct home page after login, and reset page on logout
+  useEffect(() => {
+    if (!authReady) return;
+    if (!user) {
+      // User logged out — reset everything back to login
+      setPage('login');
+      setSelectedComplaint(null);
+      setSelectedTask(null);
+      setLastSubmittedId(null);
+      setActiveTab('home');
+      setWorkerTab('home');
+      return;
+    }
+    // User just logged in
+    if (user.type === 'citizen') { setPage('home'); setActiveTab('home'); }
+    else { setPage('workerDash'); setWorkerTab('home'); }
+  }, [user?.id, authReady]);
+
   // Show splash while restoring session from SecureStore
   if (!authReady) {
     return (
@@ -86,18 +104,15 @@ function AppContent() {
     );
   }
 
-  // After login redirect
-  if (user && page === 'login') {
-    if (user.type === 'citizen') { setPage('home'); setActiveTab('home'); }
-    else { setPage('workerDash'); setWorkerTab('home'); }
-  }
-
   if (!user) {
     if (page === 'register') return <Register onBack={() => setPage('login')} />;
     return <Login onRegister={() => setPage('register')} />;
   }
 
-  const handleLogout = () => { logout(); setPage('login'); };
+  const handleLogout = async () => {
+    await logout();
+    // page will be reset to 'login' by the useEffect above when user becomes null
+  };
 
   // ── Worker flow ──
   if (user.type === 'worker') {

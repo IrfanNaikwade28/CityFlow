@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 // ─── Base URL ────────────────────────────────────────────────────────────────
 // Change this to your machine's LAN IP when testing on a physical device.
 // localhost / 127.0.0.1 only works on Android emulator via 10.0.2.2.
-export const BASE_URL = 'http://192.168.114.138:8000/api';
+export const BASE_URL = 'http://192.168.137.215:8000/api';
 
 // ─── Axios instance ──────────────────────────────────────────────────────────
 const api = axios.create({
@@ -15,7 +15,7 @@ const api = axios.create({
 
 // ─── Token helpers ───────────────────────────────────────────────────────────
 const TOKEN_KEY = 'cityflow_access';
-const REFRESH_KEY = 'cityflow_refresh';
+const REFRESH_KEY = 'cityflow_refresh'; 
 
 export const tokenStorage = {
   getAccess:      () => SecureStore.getItemAsync(TOKEN_KEY),

@@ -147,7 +147,7 @@ export default function Reports() {
             <tbody className="divide-y divide-gray-50">
               {workers.map(w => (
                 <tr key={w.id} className="hover:bg-gray-50/50">
-                  <td className="px-5 py-3 font-medium text-gray-800">{w.full_name}</td>
+                   <td className="px-5 py-3 font-medium text-gray-800">{w.name || w.full_name}</td>
                   <td className="px-5 py-3 text-gray-600">{w.category}</td>
                   <td className="px-5 py-3 text-gray-600">{w.ward}</td>
                   <td className="px-5 py-3">

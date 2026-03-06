@@ -33,8 +33,8 @@ export default function Login({ onRegister }) {
     setLoading(true);
     setError('');
     await new Promise(r => setTimeout(r, 600));
-    const result = login(email, password, role);
-    if (!result.success) setError(result.error);
+    const result = await login(email, password, role);
+    if (!result.success) setError(result.error || 'Login failed. Please try again.');
     setLoading(false);
   };
 

@@ -212,7 +212,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-xs text-gray-700">{log.action}</p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {log.actor} · {new Date(log.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(log.time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
               </div>
@@ -256,7 +256,7 @@ export default function Dashboard() {
                   <td className="px-5 py-3"><StatusBadge status={issue.status} /></td>
                   <td className="px-5 py-3 hidden lg:table-cell"><PriorityBadge priority={issue.priority} /></td>
                   <td className="px-5 py-3 text-gray-600 hidden lg:table-cell">
-                    {issue.assigned_to_name || issue.assignedTo || '—'}
+                    {issue.assigned_to_name || issue.assigned_to_detail?.name || issue.assignedTo || '—'}
                   </td>
                 </tr>
               ))}

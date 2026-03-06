@@ -193,9 +193,9 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
         {/* Camera view */}
         {phase === 'camera' && (
           <View style={styles.cameraContainer}>
-            <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
-              <View style={styles.viewfinder} />
-            </CameraView>
+            <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
+            {/* Viewfinder overlay — must be outside CameraView, absolutely positioned */}
+            <View style={styles.viewfinder} pointerEvents="none" />
           </View>
         )}
 

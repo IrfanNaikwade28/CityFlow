@@ -284,9 +284,9 @@ export default function GarbageMonitoring() {
               const LAT_MIN = 16.685, LAT_MAX = 16.705;
               const LNG_MIN = 74.455, LNG_MAX = 74.470;
               const SVG_W = 600, SVG_H = 400;
-              const x = ((bin.lng - LNG_MIN) / (LNG_MAX - LNG_MIN)) * SVG_W;
+              const x = ((bin.location_lng - LNG_MIN) / (LNG_MAX - LNG_MIN)) * SVG_W;
               // lat increases upward, SVG y increases downward
-              const y = SVG_H - ((bin.lat - LAT_MIN) / (LAT_MAX - LAT_MIN)) * SVG_H;
+              const y = SVG_H - ((bin.location_lat - LAT_MIN) / (LAT_MAX - LAT_MIN)) * SVG_H;
               const st = binStatus(bin.fill_level ?? 0);
               const color = st === 'Overflow' ? '#ef4444' : st === 'Near Capacity' ? '#f59e0b' : '#22c55e';
               const isSelected = selected?.id === bin.id;

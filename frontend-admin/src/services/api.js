@@ -165,7 +165,18 @@ export async function apiGetDashboardStats() {
 export async function apiGetWardAnalytics() {
   const res = await apiFetch('/api/analytics/wards/');
   if (!res.ok) throw new Error('Failed to fetch ward analytics');
-  return res.json();
+  const data = await res.json();
+  // Normalise backend snake_case → camelCase expected by components
+  // Backend: { ward, total_issues, resolved, pending }
+  // Frontend expects: { id, totalIssues, resolved, pending, avgResolutionHours }
+  const arr = Array.isArray(data) ? data : (data.results || []);
+  return arr.map(w => ({
+    id: w.ward ?? w.id,
+    totalIssues: w.total_issues ?? w.totalIssues ?? 0,
+    resolved: w.resolved ?? 0,
+    pending: w.pending ?? 0,
+    avgResolutionHours: w.avg_resolution_hours ?? w.avgResolutionHours ?? null,
+  }));
 }
 
 export async function apiGetCategoryTrend() {
@@ -177,7 +188,10 @@ export async function apiGetCategoryTrend() {
 export async function apiGetResolutionTrend() {
   const res = await apiFetch('/api/analytics/resolution-trend/');
   if (!res.ok) throw new Error('Failed to fetch resolution trend');
-  return res.json();
+  const data = await res.json();
+  // Backend returns avg_hours; charts expect avgHours
+  const arr = Array.isArray(data) ? data : (data.results || []);
+  return arr.map(r => ({ ...r, avgHours: r.avg_hours ?? r.avgHours ?? 0 }));
 }
 
 export async function apiGetActivityLog() {
