@@ -9,6 +9,7 @@ import Wards from './pages/Wards';
 import Feed from './pages/Feed';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import IssueMap from './pages/IssueMap';
 import Login from './pages/Login';
 
 function AuthGuard({ children }) {
@@ -63,6 +64,7 @@ function AppRoutes() {
         <Route path="workers" element={<Workers />} />
         <Route path="wards" element={<Wards />} />
         <Route path="feed" element={<Feed />} />
+        <Route path="map" element={<IssueMap />} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />
       </Route>

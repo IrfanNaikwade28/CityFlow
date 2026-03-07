@@ -5,7 +5,33 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { Camera, MapPin, X, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react-native';
+import { Camera, X, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react-native';
+
+// Google Static Maps thumbnail — plain <Image>, no native package needed.
+// Silently hides itself if the network request fails.
+function MiniMap({ lat, lng, size = 72 }) {
+  const [failed, setFailed] = useState(false);
+  if (!lat || !lng || failed) return null;
+  const url =
+    `https://maps.googleapis.com/maps/api/staticmap` +
+    `?center=${lat},${lng}&zoom=15&size=${size}x${size}&scale=2` +
+    `&markers=color:red%7C${lat},${lng}`;
+  return (
+    <Image
+      source={{ uri: url }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.25)',
+        backgroundColor: '#1e293b',
+      }}
+      resizeMode="cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 /**
  * GeoCamera — full-screen camera modal.
@@ -14,16 +40,10 @@ import { Camera, MapPin, X, RefreshCw, CheckCircle, AlertTriangle } from 'lucide
  *   onCapture({ photo: uri, location: { lat, lng, label, address } })
  *   onClose()
  *   label — optional heading string
- *
- * Behaviour:
- *   - Requests BOTH camera and location permissions on open.
- *   - If either is denied, blocks usage and shows a message.
- *   - On capture, fetches real GPS coords + reverse-geocoded address.
- *   - Shows geo-tag overlay with lat, lng, address, and date/time.
  */
 export default function GeoCamera({ visible, onCapture, onClose, label = 'Take Photo' }) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [locPermission, setLocPermission] = useState(null); // 'granted' | 'denied' | null
+  const [locPermission, setLocPermission] = useState(null);
   const [facing, setFacing] = useState('back');
   const [phase, setPhase] = useState('camera'); // camera | locating | preview | error
   const [photoUri, setPhotoUri] = useState(null);
@@ -31,6 +51,7 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
   const [geoAddress, setGeoAddress] = useState('');
   const [geoCoords, setGeoCoords] = useState(null);
   const [geoDateTime, setGeoDateTime] = useState('');
+  const [geoDateFull, setGeoDateFull] = useState('');
   const cameraRef = useRef(null);
 
   // Reset state and request permissions when modal opens
@@ -42,15 +63,14 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
     setGeoAddress('');
     setGeoCoords(null);
     setGeoDateTime('');
+    setGeoDateFull('');
     requestAllPermissions();
   }, [visible]);
 
   const requestAllPermissions = async () => {
-    // Camera permission
     if (cameraPermission && !cameraPermission.granted) {
       await requestCameraPermission();
     }
-    // Location permission
     const { status } = await Location.requestForegroundPermissionsAsync();
     setLocPermission(status);
   };
@@ -62,7 +82,7 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
   const capture = async () => {
     if (!cameraRef.current) return;
     try {
-      const pic = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      const pic = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       setPhotoUri(pic.uri);
       setPhase('locating');
       await fetchGeo();
@@ -79,8 +99,20 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
       const { latitude, longitude } = loc.coords;
       setGeoCoords({ lat: latitude, lng: longitude });
 
-      const coordLabel = `${latitude.toFixed(5)}° N, ${longitude.toFixed(5)}° E`;
-      setGeoLabel(coordLabel);
+      // Format as DMS — "Lat 34° 58' 25.464" Long E 85° 20' 16.872""
+      const toDMS = (decimal) => {
+        const deg = Math.floor(Math.abs(decimal));
+        const minFull = (Math.abs(decimal) - deg) * 60;
+        const min = Math.floor(minFull);
+        const sec = (minFull - min) * 60;
+        return { deg, min, sec };
+      };
+      const latDMS = toDMS(latitude);
+      const lngDMS = toDMS(longitude);
+      const coordStr =
+        `Lat ${latDMS.deg}° ${latDMS.min}' ${latDMS.sec.toFixed(3)}" ` +
+        `Long ${longitude >= 0 ? 'E' : 'W'} ${lngDMS.deg}° ${lngDMS.min}' ${lngDMS.sec.toFixed(3)}"`;
+      setGeoLabel(coordStr);
 
       // Reverse geocode
       const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -90,17 +122,28 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
           place.street,
           place.district || place.subregion,
           place.city,
+          place.region,
         ].filter(Boolean);
-        const address = parts.join(', ') || place.region || 'Unknown location';
-        setGeoAddress(address);
+        setGeoAddress(parts.join(', ') || 'Unknown location');
       }
     } catch {
-      // Real GPS failed — show best-effort coords
       setGeoLabel('GPS unavailable');
       setGeoAddress('Location could not be determined');
     }
 
     const now = new Date();
+    setGeoDateFull(
+      now.toLocaleString('en-IN', {
+        weekday: 'long',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
+    );
     setGeoDateTime(
       now.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
     );
@@ -144,7 +187,7 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
     );
   }
 
-  // Either permission denied — block and show message
+  // Either permission denied
   if (!bothGranted) {
     const cameraOk = cameraPermission?.granted;
     const locOk = locPermission === 'granted';
@@ -167,10 +210,7 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
               {!locOk ? '• Location permission is denied.\n' : ''}
               {'\n'}Please enable them in your device Settings.
             </Text>
-            <TouchableOpacity
-              style={styles.primaryBtn}
-              onPress={requestAllPermissions}
-            >
+            <TouchableOpacity style={styles.primaryBtn} onPress={requestAllPermissions}>
               <Text style={styles.primaryBtnText}>Grant Permissions</Text>
             </TouchableOpacity>
           </View>
@@ -194,7 +234,6 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
         {phase === 'camera' && (
           <View style={styles.cameraContainer}>
             <CameraView ref={cameraRef} style={styles.camera} facing={facing} />
-            {/* Viewfinder overlay — must be outside CameraView, absolutely positioned */}
             <View style={styles.viewfinder} pointerEvents="none" />
           </View>
         )}
@@ -210,24 +249,45 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
           </View>
         )}
 
-        {/* Preview with geo-tag */}
+        {/* Preview with rich geo-stamp */}
         {phase === 'preview' && photoUri && (
           <View style={styles.photoContainer}>
             <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+
             <View style={styles.geoStamp}>
-              <View style={styles.geoStampContent}>
-                {/* Address line */}
-                <View style={styles.geoRow}>
-                  <MapPin size={13} color="#4ade80" />
-                  <Text style={styles.geoAddress} numberOfLines={2}>{geoAddress || geoLabel}</Text>
+              {/* Blue accent line — matches reference */}
+              <View style={styles.geoAccentBar} />
+
+              {/* Main row: mini-map + text */}
+              <View style={styles.geoBody}>
+                <MiniMap lat={geoCoords?.lat} lng={geoCoords?.lng} size={72} />
+
+                <View style={styles.geoTextBlock}>
+                  {/* Location name — large bold white */}
+                  <Text style={styles.geoLocationName} numberOfLines={1}>
+                    {geoAddress.split(',')[0] || 'Unknown Location'}
+                  </Text>
+                  {/* Full address */}
+                  <Text style={styles.geoAddressLine} numberOfLines={2}>
+                    {geoAddress}
+                  </Text>
+                  {/* DMS coordinates — green */}
+                  <Text style={styles.geoCoordsLine} numberOfLines={1}>
+                    {geoLabel}
+                  </Text>
+                  {/* Full date/time */}
+                  <Text style={styles.geoDateLine}>{geoDateFull}</Text>
                 </View>
-                {/* Coordinates */}
-                <Text style={styles.geoCoords}>{geoLabel}</Text>
-                {/* Date/time + watermark */}
-                <View style={styles.geoFooterRow}>
-                  <Text style={styles.geoDateTime}>{geoDateTime}</Text>
-                  <Text style={styles.geoWatermark}>CityFlow</Text>
-                </View>
+              </View>
+
+              {/* Footer: watermark + decimal coords */}
+              <View style={styles.geoFooter}>
+                <Text style={styles.geoWatermark}>📍 CityFlow</Text>
+                {geoCoords && (
+                  <Text style={styles.geoDecimalCoords}>
+                    {geoCoords.lat.toFixed(6)}, {geoCoords.lng.toFixed(6)}
+                  </Text>
+                )}
               </View>
             </View>
           </View>
@@ -281,40 +341,134 @@ export default function GeoCamera({ visible, onCapture, onClose, label = 'Take P
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827', gap: 16, paddingHorizontal: 28 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 52, paddingBottom: 12, backgroundColor: 'rgba(0,0,0,0.8)' },
+  centered: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#111827', gap: 16, paddingHorizontal: 28,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
   headerTitle: { color: '#fff', fontWeight: '600', fontSize: 14 },
+
+  // Camera
   cameraContainer: { flex: 1, position: 'relative' },
   camera: { flex: 1 },
-  viewfinder: { position: 'absolute', top: '25%', left: '12%', right: '12%', bottom: '25%', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12 },
+  viewfinder: {
+    position: 'absolute', top: '25%', left: '12%', right: '12%', bottom: '25%',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', borderRadius: 12,
+  },
+
+  // Photo container (locating + preview)
   photoContainer: { flex: 1, position: 'relative' },
   photo: { flex: 1, width: '100%' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  overlay: {
+    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center', gap: 12,
+  },
   overlayText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  // Geo-tag overlay
-  geoStamp: { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  geoStampContent: { backgroundColor: 'rgba(0,0,0,0.72)', paddingHorizontal: 16, paddingBottom: 16, paddingTop: 12, gap: 4 },
-  geoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  geoAddress: { color: '#fff', fontSize: 12, fontWeight: '600', flex: 1, lineHeight: 17 },
-  geoCoords: { color: '#4ade80', fontSize: 11, fontWeight: '500', marginLeft: 19 },
-  geoFooterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, marginLeft: 19 },
-  geoDateTime: { color: 'rgba(255,255,255,0.6)', fontSize: 10 },
-  geoWatermark: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  // Permission denied
+
+  // ─── Rich geo-stamp ───────────────────────────────────────────────────────
+  geoStamp: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(8,12,22,0.90)',
+  },
+  geoAccentBar: {
+    height: 3,
+    backgroundColor: '#2563eb',
+  },
+  geoBody: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  geoTextBlock: {
+    flex: 1,
+    gap: 3,
+  },
+  geoLocationName: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.1,
+    lineHeight: 17,
+  },
+  geoAddressLine: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  geoCoordsLine: {
+    color: '#4ade80',
+    fontSize: 9.5,
+    fontWeight: '600',
+    marginTop: 1,
+    letterSpacing: 0.2,
+  },
+  geoDateLine: {
+    color: 'rgba(255,255,255,0.52)',
+    fontSize: 9,
+    marginTop: 1,
+  },
+  geoFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    paddingTop: 5,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  geoWatermark: {
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  geoDecimalCoords: {
+    color: 'rgba(255,255,255,0.38)',
+    fontSize: 9,
+  },
+
+  // ─── Permissions error ────────────────────────────────────────────────────
   errorTitle: { color: '#fff', fontWeight: '700', fontSize: 16, textAlign: 'center' },
   errorBody: { color: '#9ca3af', fontSize: 13, textAlign: 'center', lineHeight: 20 },
-  primaryBtn: { backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+  primaryBtn: {
+    backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
+  },
   primaryBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  // Bottom bar
+
+  // ─── Bottom bar ───────────────────────────────────────────────────────────
   bottomBar: { backgroundColor: '#000', paddingHorizontal: 24, paddingVertical: 24 },
   shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  shutter: { width: 64, height: 64, borderRadius: 32, borderWidth: 4, borderColor: '#fff', backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  shutter: {
+    width: 64, height: 64, borderRadius: 32, borderWidth: 4,
+    borderColor: '#fff', backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   shutterInner: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff' },
-  flipSmallBtn: { width: 48, height: 48, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  flipSmallBtn: {
+    width: 48, height: 48, backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 24, alignItems: 'center', justifyContent: 'center',
+  },
   previewActions: { flexDirection: 'row', gap: 12 },
-  retakeBtn: { flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  retakeBtn: {
+    flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+  },
   retakeBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  confirmBtn: { flex: 1, backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  confirmBtn: {
+    flex: 1, backgroundColor: '#22c55e', paddingVertical: 12, borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
   confirmBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   waitRow: { alignItems: 'center' },
   waitText: { color: 'rgba(255,255,255,0.5)', fontSize: 14 },

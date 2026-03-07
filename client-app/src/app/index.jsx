@@ -164,6 +164,7 @@ function AppContent() {
         <WorkerDashboard
           onTaskDetail={(task) => { setSelectedTask(task); setPage('taskDetail'); }}
           onLogout={handleLogout}
+          onProfile={goWorkerProfile}
         />
       );
     })();

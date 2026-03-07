@@ -122,6 +122,17 @@ export const aiAPI = {
     timeout: 60000, // AI call can take longer
   }),
   verifyCompletion: (issueId) => api.post(`/ai/verify-completion/${issueId}/`),
+  previewCompletion: (issueId, photoUri) => {
+    const formData = new FormData();
+    const filename = photoUri.split('/').pop() || 'completion.jpg';
+    const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+    const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    formData.append('completion_photo', { uri: photoUri, name: filename, type: mime });
+    return api.post(`/ai/preview-completion/${issueId}/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+  },
 };
 
 // ─── Analytics endpoints ─────────────────────────────────────────────────────

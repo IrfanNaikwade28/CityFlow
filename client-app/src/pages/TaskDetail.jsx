@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Image, ActivityIndicator, KeyboardAvoidingView, Platform,
+  Image, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useClient } from '../context/ClientContext';
 import {
   ArrowLeft, MapPin, Camera, CheckCircle, Clock,
-  Cpu, ShieldCheck, CheckCircle2,
+  ShieldCheck, CheckCircle2, AlertTriangle,
 } from 'lucide-react-native';
 import { categoryIcons, statusConfig } from '../data/mockData';
 import GeoCamera from '../components/shared/GeoCamera';
@@ -26,13 +26,11 @@ function StatusBadge({ status }) {
 
 export default function TaskDetail({ task, onBack }) {
   const { updateTaskStatus, myTasks } = useClient();
-  const [proofNote, setProofNote] = useState('');
   const [showProofForm, setShowProofForm] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [completionPhoto, setCompletionPhoto] = useState(null);
-  const [aiState, setAiState] = useState('idle'); // idle | scanning | verified | error
-  const [aiVerdict, setAiVerdict] = useState('');
   const [loading, setLoading] = useState(false);
+  const [aiPreview, setAiPreview] = useState(null); // null | 'scanning' | { score, verdict }
 
   const live = myTasks.find(t => t.id === task.id) || task;
   const isResolved = live.status === 'Resolved' || live.status === 'Closed';
@@ -46,24 +44,25 @@ export default function TaskDetail({ task, onBack }) {
     setLoading(false);
   };
 
-  const handlePhotoCapture = async ({ photo }) => {
+  const handlePhotoCapture = ({ photo }) => {
     setCompletionPhoto(photo);
     setShowCamera(false);
-    setAiState('scanning');
-    setAiVerdict('');
-    // We can't call verify-completion until after we PATCH with the photo.
-    // So we just show "scanning" here as a placeholder — actual AI runs on backend
-    // when the worker hits "Submit & Resolve" (the PATCH response includes ai_completion_score).
-    // Simulate a brief analysis delay for UX, then move to "verified".
-    await new Promise(r => setTimeout(r, 1500));
-    setAiState('verified');
+    setAiPreview('scanning');
+    aiAPI.previewCompletion(live._id, photo)
+      .then(({ data }) => {
+        setAiPreview({ score: data.completion_score, verdict: data.verdict });
+      })
+      .catch(() => {
+        // Preview failed — silently allow submit without score
+        setAiPreview({ score: null, verdict: null });
+      });
   };
 
   const handleResolve = async () => {
     if (!completionPhoto) { setShowCamera(true); return; }
     setLoading(true);
     try {
-      await updateTaskStatus(live.id, 'Resolved', proofNote, completionPhoto);
+      await updateTaskStatus(live.id, 'Resolved', '', completionPhoto);
       setShowProofForm(false);
     } catch { /* ignore — context logs error */ }
     setLoading(false);
@@ -219,29 +218,53 @@ export default function TaskDetail({ task, onBack }) {
                         <Image source={{ uri: completionPhoto }} style={styles.completionPhoto} resizeMode="cover" />
                         <TouchableOpacity
                           style={styles.retakeBtn}
-                          onPress={() => { setCompletionPhoto(null); setAiState('idle'); }}
+                          onPress={() => { setCompletionPhoto(null); setAiPreview(null); }}
                         >
                           <Text style={styles.retakeBtnText}>Retake</Text>
                         </TouchableOpacity>
                       </View>
 
-                      {aiState === 'scanning' && (
-                        <View style={styles.aiBox}>
-                          <ActivityIndicator size="small" color="#3b82f6" />
+                      {/* AI Preview status box */}
+                      {aiPreview === 'scanning' && (
+                        <View style={styles.aiBoxScanning}>
+                          <ActivityIndicator size="small" color="#2563eb" />
                           <View>
-                            <View style={styles.aiTitleRow}>
-                              <Cpu size={12} color="#1d4ed8" />
-                              <Text style={styles.aiTitle}> AI Verification Running…</Text>
-                            </View>
-                            <Text style={styles.aiSub}>Analysing completion evidence</Text>
+                            <Text style={styles.aiTitleBlue}>AI Analysing…</Text>
+                            <Text style={styles.aiSubBlue}>Checking your completion quality</Text>
                           </View>
                         </View>
                       )}
-                      {aiState === 'verified' && (
+
+                      {aiPreview && aiPreview !== 'scanning' && aiPreview.score != null && aiPreview.score >= 50 && (
+                        <View style={styles.aiBoxGreen}>
+                          <ShieldCheck size={24} color="#22c55e" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.aiTitleGreen}>AI Score: {aiPreview.score}/100</Text>
+                            {aiPreview.verdict ? (
+                              <Text style={styles.aiSubGreen} numberOfLines={3}>{aiPreview.verdict}</Text>
+                            ) : null}
+                          </View>
+                        </View>
+                      )}
+
+                      {aiPreview && aiPreview !== 'scanning' && aiPreview.score != null && aiPreview.score < 50 && (
+                        <View style={styles.aiBoxWarning}>
+                          <AlertTriangle size={24} color="#b45309" />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.aiTitleWarning}>Low Quality — Score: {aiPreview.score}/100</Text>
+                            {aiPreview.verdict ? (
+                              <Text style={styles.aiSubWarning} numberOfLines={3}>{aiPreview.verdict}</Text>
+                            ) : null}
+                            <Text style={styles.aiSubWarningHint}>Consider retaking. You can still submit.</Text>
+                          </View>
+                        </View>
+                      )}
+
+                      {aiPreview && aiPreview !== 'scanning' && aiPreview.score == null && (
                         <View style={styles.aiBoxGreen}>
                           <ShieldCheck size={24} color="#22c55e" />
                           <View>
-                            <Text style={styles.aiTitleGreen}>Photo Captured</Text>
+                            <Text style={styles.aiTitleGreen}>Photo Ready</Text>
                             <Text style={styles.aiSubGreen}>AI will score your work on submission</Text>
                           </View>
                         </View>
@@ -249,34 +272,20 @@ export default function TaskDetail({ task, onBack }) {
                     </View>
                   )}
 
-                  <View>
-                    <Text style={styles.noteLabel}>Resolution Note</Text>
-                    <TextInput
-                      style={styles.noteInput}
-                      value={proofNote}
-                      onChangeText={setProofNote}
-                      placeholder="Describe what was done to resolve this issue…"
-                      placeholderTextColor="#9ca3af"
-                      multiline
-                      numberOfLines={3}
-                      textAlignVertical="top"
-                    />
-                  </View>
-
                   <View style={styles.proofActions}>
                     <TouchableOpacity
                       style={styles.cancelBtn}
-                      onPress={() => { setShowProofForm(false); setCompletionPhoto(null); setAiState('idle'); }}
+                      onPress={() => { setShowProofForm(false); setCompletionPhoto(null); setAiPreview(null); }}
                     >
                       <Text style={styles.cancelBtnText}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[
                         styles.submitResolveBtn,
-                        (!completionPhoto || !proofNote.trim() || aiState === 'scanning' || loading) && { opacity: 0.5 },
+                        (!completionPhoto || loading || aiPreview === 'scanning') && { opacity: 0.5 },
                       ]}
                       onPress={handleResolve}
-                      disabled={!completionPhoto || !proofNote.trim() || aiState === 'scanning' || loading}
+                      disabled={!completionPhoto || loading || aiPreview === 'scanning'}
                     >
                       {loading
                         ? <ActivityIndicator size="small" color="#fff" />
@@ -297,17 +306,25 @@ export default function TaskDetail({ task, onBack }) {
               </View>
               <Text style={styles.resolvedTitle}>Task Resolved!</Text>
               <Text style={styles.resolvedSub}>Great work. This issue has been marked as resolved.</Text>
+
               {live.aiScore != null && (
-                <View style={styles.aiScoreBox}>
-                  <ShieldCheck size={16} color="#15803d" />
-                  <Text style={styles.aiScoreText}>
-                    AI Score: {live.aiScore}/100
-                    {live.aiVerdict ? ` — ${live.aiVerdict}` : ''}
-                  </Text>
+                <View style={styles.aiScoreCard}>
+                  <View style={styles.aiScoreRow}>
+                    <ShieldCheck size={20} color="#15803d" />
+                    <Text style={styles.aiScoreLabel}>AI Verification Score</Text>
+                  </View>
+                  <Text style={styles.aiScoreNumber}>{live.aiScore}<Text style={styles.aiScoreOutOf}>/100</Text></Text>
+                  {live.aiVerdict ? (
+                    <Text style={styles.aiVerdictFull}>{live.aiVerdict}</Text>
+                  ) : null}
                 </View>
               )}
+
               {live.completionPhoto && (
-                <Image source={{ uri: live.completionPhoto }} style={styles.resolvedPhoto} resizeMode="cover" />
+                <View style={{ width: '100%' }}>
+                  <Text style={styles.completionPhotoLabel}>Completion Photo</Text>
+                  <Image source={{ uri: live.completionPhoto }} style={styles.resolvedPhoto} resizeMode="cover" />
+                </View>
               )}
             </View>
           )}
@@ -364,15 +381,16 @@ const styles = StyleSheet.create({
   completionPhoto: { width: '100%', height: 176 },
   retakeBtn: { position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   retakeBtnText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  aiBox: { marginTop: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  aiTitleRow: { flexDirection: 'row', alignItems: 'center' },
-  aiTitle: { fontSize: 11, fontWeight: '700', color: '#1d4ed8' },
-  aiSub: { fontSize: 11, color: '#3b82f6', marginTop: 2 },
-  aiBoxGreen: { marginTop: 8, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  aiBoxGreen: { marginTop: 8, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   aiTitleGreen: { fontSize: 11, fontWeight: '700', color: '#15803d' },
   aiSubGreen: { fontSize: 11, color: '#16a34a', marginTop: 2 },
-  noteLabel: { fontSize: 11, fontWeight: '700', color: '#4b5563', marginBottom: 6 },
-  noteInput: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12, fontSize: 13, color: '#111827', backgroundColor: '#f9fafb', height: 96, textAlignVertical: 'top' },
+  aiBoxScanning: { marginTop: 8, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  aiTitleBlue: { fontSize: 11, fontWeight: '700', color: '#1d4ed8' },
+  aiSubBlue: { fontSize: 11, color: '#3b82f6', marginTop: 2 },
+  aiBoxWarning: { marginTop: 8, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  aiTitleWarning: { fontSize: 11, fontWeight: '700', color: '#b45309' },
+  aiSubWarning: { fontSize: 11, color: '#92400e', marginTop: 2 },
+  aiSubWarningHint: { fontSize: 10, color: '#d97706', marginTop: 4, fontStyle: 'italic' },
   proofActions: { flexDirection: 'row', gap: 12 },
   cancelBtn: { flex: 1, borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   cancelBtnText: { color: '#4b5563', fontWeight: '600', fontSize: 13 },
@@ -382,7 +400,12 @@ const styles = StyleSheet.create({
   resolvedIcon: { width: 56, height: 56, backgroundColor: '#dcfce7', borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   resolvedTitle: { fontSize: 16, fontWeight: '700', color: '#14532d' },
   resolvedSub: { fontSize: 12, color: '#16a34a', textAlign: 'center' },
-  aiScoreBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#dcfce7', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
-  aiScoreText: { fontSize: 12, fontWeight: '600', color: '#15803d', flex: 1 },
+  aiScoreCard: { width: '100%', backgroundColor: '#dcfce7', borderRadius: 14, padding: 16, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: '#86efac' },
+  aiScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  aiScoreLabel: { fontSize: 11, fontWeight: '700', color: '#15803d' },
+  aiScoreNumber: { fontSize: 40, fontWeight: '800', color: '#14532d', lineHeight: 48 },
+  aiScoreOutOf: { fontSize: 18, fontWeight: '500', color: '#16a34a' },
+  aiVerdictFull: { fontSize: 12, color: '#15803d', textAlign: 'center', lineHeight: 18 },
+  completionPhotoLabel: { fontSize: 11, fontWeight: '700', color: '#15803d', marginBottom: 6, alignSelf: 'flex-start' },
   resolvedPhoto: { width: '100%', height: 160, borderRadius: 14, marginTop: 4 },
 });

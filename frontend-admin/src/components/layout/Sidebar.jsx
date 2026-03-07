@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, AlertCircle, Trash2, BarChart2,
-  Users, Map, Settings, X, Radio
+  Users, Map, Globe2, Settings, X, Radio
 } from 'lucide-react';
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { to: '/workers', icon: Users, label: 'Workers' },
   { to: '/wards', icon: Map, label: 'Wards' },
   { to: '/feed', icon: Radio, label: 'Civic Feed' },
+  { to: '/map', icon: Globe2, label: 'Issue Map' },
   { to: '/reports', icon: BarChart2, label: 'Reports' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

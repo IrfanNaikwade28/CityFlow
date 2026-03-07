@@ -110,14 +110,43 @@ def verify_completion(issue) -> dict | None:
         if not issue.image or not issue.completion_photo:
             return None
 
-        from google.genai import types
-
-        client = _get_client()
-
         with open(issue.image.path, 'rb') as f:
             before_bytes = f.read()
         with open(issue.completion_photo.path, 'rb') as f:
             after_bytes = f.read()
+
+        return verify_completion_from_bytes(issue, after_bytes, 'image/jpeg', before_bytes=before_bytes)
+
+    except Exception as e:
+        logger.error(f"AI verify_completion failed for issue {issue.pk}: {e}")
+        return None
+
+
+def verify_completion_from_bytes(issue, after_bytes: bytes, after_mime: str, before_bytes: bytes | None = None) -> dict | None:
+    """
+    Score a worker's completion photo against the before-image.
+    Accepts raw bytes so the after-photo need not be saved to disk yet.
+
+    Args:
+        issue:        Issue model instance (used for title/category/before-image path).
+        after_bytes:  Raw bytes of the worker's completion photo.
+        after_mime:   MIME type of the after photo (e.g. 'image/jpeg').
+        before_bytes: Raw bytes of the before photo. If None, read from issue.image.path.
+
+    Returns:
+        {'completion_score': int 0-100, 'verdict': str}
+        or None on failure.
+    """
+    try:
+        from google.genai import types
+
+        client = _get_client()
+
+        if before_bytes is None:
+            if not issue.image:
+                return None
+            with open(issue.image.path, 'rb') as f:
+                before_bytes = f.read()
 
         prompt = f"""You are a municipal work verification system for CityFlow, Ichalkaranji.
 
@@ -139,7 +168,7 @@ Respond ONLY with valid JSON (no markdown, no extra text):
             model='gemini-flash-lite-latest',
             contents=[
                 types.Part.from_bytes(data=before_bytes, mime_type='image/jpeg'),
-                types.Part.from_bytes(data=after_bytes, mime_type='image/jpeg'),
+                types.Part.from_bytes(data=after_bytes, mime_type=after_mime),
                 prompt,
             ],
         )
@@ -151,5 +180,5 @@ Respond ONLY with valid JSON (no markdown, no extra text):
         }
 
     except Exception as e:
-        logger.error(f"AI verify_completion failed for issue {issue.pk}: {e}")
+        logger.error(f"AI verify_completion_from_bytes failed for issue {issue.pk}: {e}")
         return None

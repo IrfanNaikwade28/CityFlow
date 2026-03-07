@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
-  Modal, TouchableWithoutFeedback, Alert, Keyboard,
+  Modal, TouchableWithoutFeedback, Alert, Keyboard, useColorScheme,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useClient } from '../context/ClientContext';
@@ -123,6 +123,12 @@ function OtpInput({ values, refs, onChange }) {
 
 export default function WorkerProfile({ onLogout }) {
   const { user, uploadProfilePhoto, updateProfile } = useClient();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  // Photo picker icon colors — dynamic for light/dark
+  const photoIconBg    = isDark ? '#1e3a8a' : '#eff6ff';
+  const photoIconColor = isDark ? '#93c5fd' : '#2563eb';
 
   // Profile photo
   const [profilePhoto, setProfilePhoto]         = useState(user?.profilePhoto || null);
@@ -562,7 +568,7 @@ export default function WorkerProfile({ onLogout }) {
                   <Text style={styles.photoSheetTitle}>Profile Photo</Text>
 
                   <TouchableOpacity style={styles.photoSheetOption} onPress={pickFromCamera}>
-                    <View style={styles.photoSheetIcon}><Camera size={20} color="#2563eb" /></View>
+                    <View style={[styles.photoSheetIcon, { backgroundColor: photoIconBg }]}><Camera size={20} color={photoIconColor} /></View>
                     <View>
                       <Text style={styles.photoSheetOptionText}>Take Photo</Text>
                       <Text style={styles.photoSheetOptionSub}>Use your camera</Text>
@@ -570,7 +576,7 @@ export default function WorkerProfile({ onLogout }) {
                   </TouchableOpacity>
 
                   <TouchableOpacity style={styles.photoSheetOption} onPress={pickFromGallery}>
-                    <View style={styles.photoSheetIcon}><Images size={20} color="#2563eb" /></View>
+                    <View style={[styles.photoSheetIcon, { backgroundColor: photoIconBg }]}><Images size={20} color={photoIconColor} /></View>
                     <View>
                       <Text style={styles.photoSheetOptionText}>Choose from Gallery</Text>
                       <Text style={styles.photoSheetOptionSub}>Pick from your photos</Text>

@@ -6,7 +6,7 @@ import {
 import { useClient } from '../context/ClientContext';
 import {
   ArrowLeft, ThumbsUp, MessageCircle, Send, User,
-  CheckCircle2, ImageIcon,
+  CheckCircle2, ImageIcon, ShieldCheck,
 } from 'lucide-react-native';
 import { categoryIcons, statusConfig } from '../data/mockData';
 
@@ -166,6 +166,29 @@ export default function ComplaintDetail({ complaint, onBack }) {
                   </View>
                 ) : null}
               </View>
+            </View>
+          )}
+
+          {/* AI verification score — only shown when resolved */}
+          {isResolved && live.aiScore != null && (
+            <View style={[
+              styles.card,
+              live.aiScore >= 50 ? styles.aiCardGreen : styles.aiCardAmber,
+            ]}>
+              <View style={styles.aiScoreRow}>
+                <ShieldCheck size={18} color={live.aiScore >= 50 ? '#15803d' : '#b45309'} />
+                <Text style={[styles.aiScoreLabel, live.aiScore >= 50 ? { color: '#15803d' } : { color: '#b45309' }]}>
+                  AI Verification Score
+                </Text>
+                <Text style={[styles.aiScoreNumber, live.aiScore >= 50 ? { color: '#14532d' } : { color: '#92400e' }]}>
+                  {live.aiScore}<Text style={styles.aiScoreOutOf}>/100</Text>
+                </Text>
+              </View>
+              {live.aiVerdict ? (
+                <Text style={[styles.aiVerdict, live.aiScore >= 50 ? { color: '#16a34a' } : { color: '#d97706' }]}>
+                  {live.aiVerdict}
+                </Text>
+              ) : null}
             </View>
           )}
 
@@ -346,4 +369,11 @@ const styles = StyleSheet.create({
   commentInputRow: { flexDirection: 'row', gap: 8 },
   commentInput: { flex: 1, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#111827', backgroundColor: '#f9fafb' },
   sendBtn: { width: 42, height: 42, backgroundColor: '#2563eb', borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  aiCardGreen: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' },
+  aiCardAmber: { backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d' },
+  aiScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  aiScoreLabel: { fontSize: 12, fontWeight: '700', flex: 1 },
+  aiScoreNumber: { fontSize: 22, fontWeight: '800' },
+  aiScoreOutOf: { fontSize: 12, fontWeight: '500' },
+  aiVerdict: { fontSize: 12, lineHeight: 18, marginTop: 8 },
 });

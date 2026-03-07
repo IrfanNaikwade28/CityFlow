@@ -1,11 +1,13 @@
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  Modal, TouchableWithoutFeedback,
 } from 'react-native';
+import { useState, useRef } from 'react';
 import { useClient } from '../context/ClientContext';
 import { categoryIcons, statusConfig } from '../data/mockData';
 import {
-  ChevronRight, CheckCircle2, Clock, Bell, LogOut,
-  MapPin, AlertTriangle,
+  ChevronRight, CheckCircle2, Clock, Bell,
+  MapPin, AlertTriangle, User, LogOut,
 } from 'lucide-react-native';
 
 function StatusBadge({ status }) {
@@ -24,10 +26,29 @@ const PRIORITY_CONFIG = {
   Low:    { bar: '#4ade80', badgeBg: '#dcfce7', badgeText: '#15803d' },
 };
 
-export default function WorkerDashboard({ onTaskDetail, onLogout }) {
-  const { user, myTasks } = useClient();  const open = myTasks.filter(t => !['Resolved', 'Closed'].includes(t.status));
+export default function WorkerDashboard({ onTaskDetail, onLogout, onProfile }) {
+  const { user, myTasks } = useClient();
+  const [menuVisible, setMenuVisible] = useState(false);
+  const avatarRef = useRef(null);
+  const [avatarPos, setAvatarPos] = useState({ top: 0, right: 0 });
+  const open = myTasks.filter(t => !['Resolved', 'Closed'].includes(t.status));
   const done = myTasks.filter(t => ['Resolved', 'Closed'].includes(t.status));
   const highPriority = open.filter(t => t.priority === 'High').length;
+
+  const initials = user?.name
+    ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'W';
+
+  const handleAvatarPress = () => {
+    if (avatarRef.current) {
+      avatarRef.current.measure((x, y, width, height, pageX, pageY) => {
+        setAvatarPos({ top: pageY + height + 6, right: 16 });
+        setMenuVisible(true);
+      });
+    } else {
+      setMenuVisible(true);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -47,8 +68,14 @@ export default function WorkerDashboard({ onTaskDetail, onLogout }) {
               <TouchableOpacity style={styles.iconBtn}>
                 <Bell size={17} color="#fff" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={onLogout}>
-                <LogOut size={15} color="#fff" />
+              {/* Profile avatar button */}
+              <TouchableOpacity
+                ref={avatarRef}
+                style={styles.avatarCircle}
+                onPress={handleAvatarPress}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.avatarText}>{initials}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -179,6 +206,36 @@ export default function WorkerDashboard({ onTaskDetail, onLogout }) {
           </View>
         )}
       </ScrollView>
+
+      {/* Avatar dropdown menu */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setMenuVisible(false)}>
+          <View style={StyleSheet.absoluteFill}>
+            <View style={[styles.avatarMenu, { top: avatarPos.top, right: avatarPos.right }]}>
+              <TouchableOpacity
+                style={styles.avatarMenuItem}
+                onPress={() => { setMenuVisible(false); onProfile && onProfile(); }}
+              >
+                <User size={15} color="#374151" />
+                <Text style={styles.avatarMenuItemText}>Profile</Text>
+              </TouchableOpacity>
+              <View style={styles.avatarMenuDivider} />
+              <TouchableOpacity
+                style={styles.avatarMenuItem}
+                onPress={() => { setMenuVisible(false); onLogout && onLogout(); }}
+              >
+                <LogOut size={15} color="#ef4444" />
+                <Text style={[styles.avatarMenuItemText, { color: '#ef4444' }]}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -233,4 +290,12 @@ const styles = StyleSheet.create({
   badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
   badgeDot: { width: 6, height: 6, borderRadius: 3 },
   badgeText: { fontSize: 10, fontWeight: '600' },
+  // Profile avatar button
+  avatarCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  // Dropdown menu
+  avatarMenu: { position: 'absolute', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 6, minWidth: 160, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 16, borderWidth: 1, borderColor: '#f3f4f6' },
+  avatarMenuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12 },
+  avatarMenuItemText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  avatarMenuDivider: { height: 1, backgroundColor: '#f3f4f6', marginHorizontal: 12 },
 });

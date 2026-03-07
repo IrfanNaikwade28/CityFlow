@@ -4,7 +4,7 @@ import { Card, Button } from '../components/ui/index.jsx';
 import {
   Radio, ThumbsUp, MessageCircle, MapPin, Clock, AlertCircle,
   Megaphone, Send, X, Shield, ChevronDown, ChevronUp, Image,
-  User, Wrench, CheckCircle, Filter
+  User, Wrench, CheckCircle, Filter, ShieldCheck
 } from 'lucide-react';
 
 const NOTICE_TYPES = ['Announcement', 'Alert', 'Maintenance', 'Event'];
@@ -112,22 +112,25 @@ function IssueCard({ issue }) {
   const isResolved = issue.status === 'Resolved' || issue.status === 'Closed';
 
   // Normalise real API field names
-  const reportedBy   = issue.reported_by_name  || issue.reportedBy  || 'Unknown';
+  const reportedBy   = issue.reported_by_detail?.name || issue.reported_by_name || issue.reportedBy || 'Unknown';
   const reportedAt   = issue.reported_at        || issue.reportedAt;
   const displayId    = issue.display_id         || issue.id;
-  const assignedTo   = issue.assigned_to_name   || issue.assignedTo;
-  const completionPhoto = issue.completion_photo || issue.completionPhoto;
+  const assignedTo   = issue.assigned_to_detail?.name || issue.assigned_to_name || issue.assignedTo;
+  const imageUrl     = issue.image_url          || issue.image;
+  const completionPhoto = issue.completion_photo_url || issue.completion_photo || issue.completionPhoto;
   const resolvedAt   = issue.resolved_at        || issue.resolutionTime;
+  const aiScore      = issue.ai_completion_score  ?? issue.aiScore;
+  const aiVerdict    = issue.ai_completion_verdict || issue.aiVerdict;
 
   return (
     <div className={`border rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow
       ${isResolved ? 'border-green-100' : 'border-gray-100'}`}>
 
       {/* Issue image */}
-      {issue.image && (
+      {imageUrl && (
         <div className="relative">
           <img
-            src={issue.image}
+            src={imageUrl}
             alt={issue.title}
             className="w-full object-cover"
             style={{ maxHeight: 180 }}
@@ -169,7 +172,7 @@ function IssueCard({ issue }) {
         </div>
 
         {/* No-image category banner */}
-        {!issue.image && (
+        {!imageUrl && (
           <div className="flex items-center gap-2 mb-2">
             <span className="text-lg">{categoryIcons[issue.category]}</span>
             <span className="text-xs text-gray-500 font-medium">{issue.category}</span>
@@ -224,6 +227,30 @@ function IssueCard({ issue }) {
           <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl border border-dashed border-gray-200">
             <Image size={12} className="text-gray-300" />
             <span className="text-xs text-gray-400">No completion photo</span>
+          </div>
+        )}
+
+        {/* AI verification score */}
+        {isResolved && aiScore != null && (
+          <div className={`mt-2 flex items-center gap-3 px-3 py-2.5 rounded-xl border
+            ${aiScore >= 50 ? 'bg-green-50 border-green-100' : 'bg-amber-50 border-amber-100'}`}>
+            <ShieldCheck size={16} className={aiScore >= 50 ? 'text-green-600' : 'text-amber-600'} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${aiScore >= 50 ? 'text-green-700' : 'text-amber-700'}`}>
+                  AI Score:
+                </span>
+                <span className={`text-sm font-extrabold ${aiScore >= 50 ? 'text-green-700' : 'text-amber-700'}`}>
+                  {aiScore}<span className="text-xs font-medium">/100</span>
+                </span>
+              </div>
+              {aiVerdict && (
+                <p className={`text-[10px] mt-0.5 leading-tight line-clamp-2
+                  ${aiScore >= 50 ? 'text-green-600' : 'text-amber-600'}`}>
+                  {aiVerdict}
+                </p>
+              )}
+            </div>
           </div>
         )}
 
