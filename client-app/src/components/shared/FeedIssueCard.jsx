@@ -110,6 +110,9 @@ export default function FeedIssueCard({ issue, readOnly = false, onUpvote, upvot
 
   return (
     <View style={[styles.card, isResolved ? styles.cardResolved : styles.cardDefault]}>
+      {/* Left accent bar for resolved posts */}
+      {isResolved && <View style={styles.resolvedAccentBar} />}
+
       {/* Issue / Before photo */}
       {issue.image ? (
         <View style={styles.photoContainer}>
@@ -197,38 +200,49 @@ export default function FeedIssueCard({ issue, readOnly = false, onUpvote, upvot
         {/* Completion photo */}
         {issue.completionPhoto && (
           <View style={styles.completionSection}>
-            <View style={styles.completionHeader}>
-              <CheckCircle size={12} color="#22c55e" />
-              <Text style={styles.completionLabel}>After Fix</Text>
-              {issue.resolvedAt && (
-                <View style={styles.completionDate}>
-                  <Clock size={9} color="#9ca3af" />
-                  <Text style={styles.completionDateText}>
-                    {new Date(issue.resolvedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                  </Text>
-                </View>
-              )}
+            {/* Divider strip — visually joins before & after as one post */}
+            <View style={styles.completionDivider}>
+              <View style={styles.completionDividerLine} />
+              <View style={styles.completionDividerPill}>
+                <CheckCircle size={9} color="#15803d" />
+                <Text style={styles.completionDividerText}>After Fix</Text>
+              </View>
+              <View style={styles.completionDividerLine} />
             </View>
-            <View style={styles.completionPhotoContainer}>
-              <Image source={{ uri: issue.completionPhoto }} style={styles.completionPhoto} resizeMode="cover" />
-              <View style={styles.completionPhotoOverlay}>
-                <View style={styles.completionOverlayRow}>
-                  <Text style={styles.completionPhotoText}>
-                    {issue.assignedToName || issue.assignedTo ? `Fixed by ${issue.assignedToName || issue.assignedTo}` : 'Issue resolved'}
-                  </Text>
-                  {issue.aiScore != null && (
-                    <View style={[
-                      styles.aiScoreBadge,
-                      issue.aiScore >= 70 ? styles.aiScoreGood :
-                      issue.aiScore >= 40 ? styles.aiScoreWarning : styles.aiScorePoor,
-                    ]}>
-                      <Text style={styles.aiScoreText}>AI {issue.aiScore}%</Text>
-                    </View>
-                  )}
+
+            {/* Tinted inset panel */}
+            <View style={styles.completionPanel}>
+              <View style={styles.completionHeader}>
+                {issue.resolvedAt && (
+                  <View style={styles.completionDate}>
+                    <Clock size={9} color="#9ca3af" />
+                    <Text style={styles.completionDateText}>
+                      {new Date(issue.resolvedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.completionPhotoContainer}>
+                <Image source={{ uri: issue.completionPhoto }} style={styles.completionPhoto} resizeMode="cover" />
+                <View style={styles.completionPhotoOverlay}>
+                  <View style={styles.completionOverlayRow}>
+                    <Text style={styles.completionPhotoText}>
+                      {issue.assignedToName || issue.assignedTo ? `Fixed by ${issue.assignedToName || issue.assignedTo}` : 'Issue resolved'}
+                    </Text>
+                    {issue.aiScore != null && (
+                      <View style={[
+                        styles.aiScoreBadge,
+                        issue.aiScore >= 70 ? styles.aiScoreGood :
+                        issue.aiScore >= 40 ? styles.aiScoreWarning : styles.aiScorePoor,
+                      ]}>
+                        <Text style={styles.aiScoreText}>AI {issue.aiScore}%</Text>
+                      </View>
+                    )}
+                  </View>
+                  {issue.aiVerdict ? (
+                    <Text style={styles.aiVerdictText}>{issue.aiVerdict}</Text>
+                  ) : null}
                 </View>
-                {issue.aiVerdict ? (
-                  <Text style={styles.aiVerdictText}>{issue.aiVerdict}</Text>
-                ) : null}
               </View>
             </View>
           </View>
@@ -323,8 +337,9 @@ export default function FeedIssueCard({ issue, readOnly = false, onUpvote, upvot
 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, marginBottom: 12 },
-  cardDefault: { borderColor: '#f3f4f6' },
-  cardResolved: { borderColor: '#dcfce7' },
+  cardDefault: { borderColor: '#e5e7eb' },
+  cardResolved: { borderColor: '#bbf7d0', backgroundColor: '#fafffe' },
+  resolvedAccentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#22c55e', zIndex: 10 },
   photoContainer: { width: '100%', aspectRatio: 16 / 9, position: 'relative' },
   photo: { width: '100%', height: '100%' },
   photoOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
@@ -382,12 +397,17 @@ const styles = StyleSheet.create({
   workerNameAssigned: { color: '#2563eb' },
   workerNameResolved: { color: '#16a34a' },
   // Completion photo
-  completionSection: { marginTop: 12 },
-  completionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  completionSection: { marginTop: 14 },
+  completionDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  completionDividerLine: { flex: 1, height: 1, backgroundColor: '#bbf7d0' },
+  completionDividerPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#dcfce7', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
+  completionDividerText: { fontSize: 10, fontWeight: '700', color: '#15803d' },
+  completionPanel: { backgroundColor: '#f0fdf4', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#bbf7d0' },
+  completionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   completionLabel: { fontSize: 11, fontWeight: '700', color: '#15803d' },
   completionDate: { flexDirection: 'row', alignItems: 'center', gap: 3, marginLeft: 'auto' },
   completionDateText: { fontSize: 10, color: '#9ca3af' },
-  completionPhotoContainer: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#bbf7d0', aspectRatio: 16 / 9 },
+  completionPhotoContainer: { borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#86efac', aspectRatio: 16 / 9 },
   completionPhoto: { width: '100%', height: '100%' },
   completionPhotoOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(20,83,45,0.5)', padding: 8 },
   completionOverlayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
