@@ -26,20 +26,22 @@ export default function ReportIssue({ onBack, onSuccess }) {
     category: '',
     title: '',
     description: '',
-    location: (user?.ward || '') + ', Ichalkaranji',
+    location: (user?.ward || '') + ', Pune',
     ward: user?.ward || 'Ward 5',
     isPublic: true,
   });
   const [submitting, setSubmitting] = useState(false);
   const [wardOpen, setWardOpen] = useState(false);
-  // AI detect state: idle | scanning | done | error
+  // AI detect state: idle | scanning | done | error | rejected
   const [aiState, setAiState] = useState('idle');
   const [aiResult, setAiResult] = useState(null);
+  const [rejectionInfo, setRejectionInfo] = useState(null);
 
   const handleCameraCapture = async ({ photo, location }) => {
     setCapturedPhoto(photo);
     setCapturedLocation(location);
     setShowCamera(false);
+    setRejectionInfo(null);
     if (location?.label) {
       setForm(p => ({ ...p, location: location.label }));
     }
@@ -56,12 +58,7 @@ export default function ReportIssue({ onBack, onSuccess }) {
       const { data } = await aiAPI.detectIssue(formData);
       console.log('[AI] Response:', JSON.stringify(data));
       setAiResult(data);
-      if (!data.ai_available) {
-        // Backend AI failed — show error so user fills in manually
-        setAiState('error');
-        return;
-      }
-      // Always overwrite category, title and description with AI result
+      // Always attempt to use AI (or fallback) result if provided
       setForm(p => ({
         ...p,
         category:    data.category    || p.category,
@@ -71,7 +68,20 @@ export default function ReportIssue({ onBack, onSuccess }) {
       setAiState('done');
     } catch (err) {
       console.error('[AI] detectIssue error:', err?.message, err?.response?.status, JSON.stringify(err?.response?.data));
-      setAiState('error');
+      
+      // Check if this is a validation rejection (400 with rejected: true)
+      const errorData = err?.response?.data;
+      if (err?.response?.status === 400 && errorData?.rejected) {
+        setAiState('rejected');
+        setRejectionInfo({
+          reason: errorData.validation?.rejection_reason,
+          message: errorData.message,
+          details: errorData.validation?.details,
+          checks: errorData.validation?.checks,
+        });
+      } else {
+        setAiState('error');
+      }
     }
   };
 
@@ -217,6 +227,30 @@ export default function ReportIssue({ onBack, onSuccess }) {
                     <Text style={styles.aiSubRed}>Please fill category and title manually</Text>
                   </View>
                 </View>
+              )}
+
+              {/* Image Rejection Warning */}
+              {aiState === 'rejected' && rejectionInfo && (
+                <View style={styles.aiBoxOrange}>
+                  <View style={styles.rejectionIcon}>
+                    <Text style={styles.rejectionIconText}>!</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.aiTitleOrange}>Image Not Accepted</Text>
+                    <Text style={styles.aiSubOrange}>{rejectionInfo.message}</Text>
+                    {rejectionInfo.details && (
+                      <Text style={styles.rejectionDetails}>{rejectionInfo.details}</Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Show retake button when rejected */}
+              {aiState === 'rejected' && (
+                <TouchableOpacity style={styles.retakeBtn} onPress={() => { setShowCamera(true); setAiState('idle'); setRejectionInfo(null); }}>
+                  <Camera size={18} color="#fff" />
+                  <Text style={styles.retakeBtnText}>Take a Different Photo</Text>
+                </TouchableOpacity>
               )}
 
               {capturedPhoto && (aiState === 'done' || aiState === 'error') && (
@@ -479,4 +513,12 @@ const styles = StyleSheet.create({
   aiBoxRed: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   aiTitleRed: { fontSize: 11, fontWeight: '700', color: '#b91c1c' },
   aiSubRed: { fontSize: 11, color: '#ef4444', marginTop: 2 },
+  aiBoxOrange: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  aiTitleOrange: { fontSize: 12, fontWeight: '700', color: '#c2410c' },
+  aiSubOrange: { fontSize: 11, color: '#ea580c', marginTop: 2 },
+  rejectionDetails: { fontSize: 10, color: '#9a3412', marginTop: 6, fontStyle: 'italic' },
+  rejectionIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' },
+  rejectionIconText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  retakeBtn: { backgroundColor: '#f97316', borderRadius: 14, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  retakeBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 });
