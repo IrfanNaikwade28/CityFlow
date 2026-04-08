@@ -130,7 +130,7 @@ def check_image_quality(image_bytes: bytes) -> dict:
     - Image can be opened (valid format)
     - Minimum resolution (not too small)
     - Not predominantly blank/single color
-    - Basic blur detection using Laplacian variance
+    - Basic blur detection using Laplacian variance (if scipy available)
     
     Returns:
         {
@@ -154,7 +154,6 @@ def check_image_quality(image_bytes: bytes) -> dict:
     
     try:
         from PIL import Image
-        import numpy as np
         
         img = Image.open(io.BytesIO(image_bytes))
         result['width'] = img.width
@@ -166,28 +165,40 @@ def check_image_quality(image_bytes: bytes) -> dict:
         if img.width < MIN_DIMENSION or img.height < MIN_DIMENSION:
             issues.append(f"Image too small: {img.width}x{img.height} (minimum {MIN_DIMENSION}px)")
         
-        # Check for blank/single-color images
-        img_array = np.array(img.convert('RGB'))
-        color_std = np.std(img_array)
-        if color_std < 10:  # Very low variation = likely blank
-            issues.append("Image appears blank or single-colored")
-        
-        # Blur detection using Laplacian variance
-        gray = np.array(img.convert('L'), dtype=np.float64)
-        
-        # Simple Laplacian kernel
-        laplacian = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
-        from scipy import ndimage
-        laplacian_img = ndimage.convolve(gray, laplacian)
-        blur_score = laplacian_img.var()
-        result['blur_score'] = float(blur_score)
-        
-        BLUR_THRESHOLD = 100  # Below this = likely blurry
-        if blur_score < BLUR_THRESHOLD:
-            issues.append(f"Image appears blurry (sharpness score: {blur_score:.1f})")
+        # Try numpy-based checks (optional)
+        try:
+            import numpy as np
+            
+            # Check for blank/single-color images
+            img_array = np.array(img.convert('RGB'))
+            color_std = np.std(img_array)
+            if color_std < 10:  # Very low variation = likely blank
+                issues.append("Image appears blank or single-colored")
+            
+            # Blur detection using Laplacian variance (requires scipy)
+            try:
+                from scipy import ndimage
+                
+                gray = np.array(img.convert('L'), dtype=np.float64)
+                # Simple Laplacian kernel
+                laplacian = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]])
+                laplacian_img = ndimage.convolve(gray, laplacian)
+                blur_score = laplacian_img.var()
+                result['blur_score'] = float(blur_score)
+                
+                BLUR_THRESHOLD = 100  # Below this = likely blurry
+                if blur_score < BLUR_THRESHOLD:
+                    issues.append(f"Image appears blurry (sharpness score: {blur_score:.1f})")
+            except ImportError:
+                # scipy not available - skip blur detection, this is fine
+                result['blur_score'] = -1  # Indicates not checked
+                
+        except ImportError:
+            # numpy not available - skip advanced checks
+            logger.debug("numpy not available for advanced quality checks")
         
     except ImportError as e:
-        logger.warning(f"PIL/numpy/scipy not available for quality checks: {e}")
+        logger.warning(f"PIL not available for quality checks: {e}")
         # Still allow submission, but flag as unchecked
         result['issues'].append("Quality checks skipped (dependencies unavailable)")
     except Exception as e:
